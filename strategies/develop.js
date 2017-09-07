@@ -6,254 +6,238 @@ var ADVICE = {
   long: 'long',
   short: 'short'
 };
+var DIRECTION = {
+  up: 'up',
+  down: 'down'
+};
 var strat = {};
 
 strat.init = function() {
-  this.currentAdvice = ADVICE.short;
+  this.lastAdvice = ADVICE.short;
   this.requiredHistory = config.tradingAdvisor.historySize;
   this.trend = {
     bbands: {
-      contracting: false,
+      direction: '',
       duration: 0,
+      upper: 0,
+      middle: 0,
+      lower: 0,
+      contracting: false,
       width: 0
     },
     macd: {
-      // direction: 'none',
-      // duration: 0,
-      // persisted: false,
-      // adviced: false
+      direction: '',
+      duration: 0,
+      macd: 0,
+      signal: 0,
+      signalDirection: '',
+      signalDuration: 0,
+      hist: 0,
+      histDirection: '',
+      histDuration: 0,
+      histAbove: false
     },
     rsi: {
-      rsi: 50,
       direction: '',
-      duration: 0
-      // direction: 'none',
-      // duration: 0,
-      // persisted: false,
-      // adviced: false
+      duration: 0,
+      rsi: 50
     }
   };
 
   this.addTalibIndicator('bbands', 'bbands', settings.BBANDS.talib);
   this.addTalibIndicator('macd', 'macd', settings.MACD.talib);
   this.addTalibIndicator('rsi', 'rsi', settings.RSI.talib);
-  this.addTalibIndicator('sma', 'sma', settings.SMA.talib);
-  this.addTalibIndicator('stochrsi', 'stochrsi', settings.STOCHRSI.talib);
-  this.addTalibIndicator('willr', 'willr', settings.WILLR.talib);
+  // this.addTalibIndicator('sma', 'sma', settings.SMA.talib);
+  // this.addTalibIndicator('stochrsi', 'stochrsi', settings.STOCHRSI.talib);
+  // this.addTalibIndicator('willr', 'willr', settings.WILLR.talib);
 };
 
 strat.update = function(candle) { };
 
-strat.log = function(candle) {
-  // var digits = 8;
-
-  // var bbands = this.talibIndicators.bbands.result;
-  // log.debug('calculated BBANDS properties for candle:');
-  // log.debug('\t', 'bband upper:', bbands.outRealUpperBand);
-  // log.debug('\t', 'bband middle:', bbands.outRealMiddleBand);
-  // log.debug('\t', 'bband lower:', bbands.outRealLowerBand);
-  
-  // var rsi = this.talibIndicators.rsi.result.outReal;
-  // log.debug('calculated RSI properties for candle:');
-  // log.debug('\t', 'rsi:', (rsi || 0).toFixed(digits));
-
-  // var macd = this.talibIndicators.macd.result;
-  // var real = macd.outMACD;
-  // var signal = macd.outMACDSignal;
-  // var hist = macd.outMACDHist;
-  // log.debug('calculated MACD properties for candle:');
-  // log.debug('\t', 'macd:', (real || 0).toFixed(digits));
-  // log.debug('\t', 'signal:', (signal || 0).toFixed(digits));
-  // log.debug('\t', 'hist:', (hist || 0).toFixed(digits));
-};
+strat.log = function(candle) { };
 
 strat.bbands = function(candle) {
-  // BBANDS
   var trend = this.trend.bbands;
-  var bbands = this.talibIndicators.bbands.result;
-  var upper = bbands.outRealUpperBand;
-  var middle = bbands.outRealMiddleBand;
-  var lower = bbands.outRealLowerBand;
-  var width = (upper - lower) / middle;
+  var indicator = this.talibIndicators.bbands.result;
+  var upper = indicator.outRealUpperBand;
+  var middle = indicator.outRealMiddleBand;
+  var lower = indicator.outRealLowerBand;
+  var width = ((upper - lower) / middle) * 100;
   var contracting = trend.width > width;
-  var duration = trend.contracting === contracting ? trend.duration + 1 : 0;
+  var direction = trend.middle < middle ? DIRECTION.up : DIRECTION.down;
+  var duration = trend.direction === direction ? trend.duration + 1 : 0;
 
   this.trend.bbands = {
-    contracting: contracting,
+    direction: direction,
     duration: duration,
+    upper: upper,
+    middle: middle,
+    lower: lower,
+    contracting: contracting,
     width: width
   };
 
-  log.debug('BBANDS:', this.trend.bbands);
+  console.log('BBANDS:', JSON.stringify(this.trend.bbands, null, 2));
 };
 
 strat.macd = function(candle) {
-  // MACD
-  // var macd = this.talibIndicators.macd.result;
-  // var macddiff = this.indicators.macd.result;
+  var trend = this.trend.macd;
+  var indicator = this.talibIndicators.macd.result;
+  var macd = indicator.outMACD;
+  var signal = indicator.outMACDSignal;
+  var hist = indicator.outMACDHist;
+  var signalDirection = trend.signal < signal ? DIRECTION.up: DIRECTION.down;
+  var signalDuration = trend.signalDirection === signalDirection ? trend.signalDuration + 1 : 0;
+  var histDirection = trend.hist < hist ? DIRECTION.up : DIRECTION.down;
+  var histDuration = trend.histDirection === histDirection ? trend.histDuration + 1 : 0;
+  var direction = trend.macd < macd ? DIRECTION.up: DIRECTION.down;
+  var duration = trend.direction === direction ? trend.duration + 1 : 0;
+  var histAbove = hist > 0;
 
-  // if (macddiff > settings.MACD.thresholds.up) {
-  //   // new trend detected
-  //   if (this.trend.macd.direction !== 'up') {
-  //     // reset the state for the new trend
-  //     this.trend.macd = {
-  //       duration: 0,
-  //       persisted: false,
-  //       direction: 'up',
-  //       adviced: false
-  //     };
-  //   }
+  this.trend.macd = {
+    direction: direction,
+    duration: duration,
+    macd: macd,
+    signal: signal,
+    signalDirection: signalDirection,
+    signalDuration: signalDuration,
+    hist: hist,
+    histDirection: histDirection,
+    histDuration: histDuration,
+    histAbove: histAbove
+  };
 
-  //   this.trend.macd.duration++;
-
-  //   log.debug('In uptrend since', this.trend.macd.duration, 'candle(s)');
-
-  //   if (this.trend.macd.duration >= settings.MACD.thresholds.persistence) {
-  //     this.trend.macd.persisted = true;
-  //   }
-
-  //   if (this.trend.macd.persisted && !this.trend.macd.adviced) {
-  //     this.trend.macd.adviced = true;
-  //     return ADVICE.long;
-  //   } else return;
-
-  // } else if (macddiff < settings.MACD.thresholds.down) {
-  //   // new trend detected
-  //   if (this.trend.macd.direction !== 'down') {
-  //     // reset the state for the new trend
-  //     this.trend.macd = {
-  //       duration: 0,
-  //       persisted: false,
-  //       direction: 'down',
-  //       adviced: false
-  //     };
-  //   }
-
-  //   this.trend.macd.duration++;
-
-  //   log.debug('In downtrend since', this.trend.macd.duration, 'candle(s)');
-
-  //   if (this.trend.macd.duration >= settings.MACD.thresholds.persistence) {
-  //     this.trend.macd.persisted = true;
-  //   }
-
-  //   if (this.trend.macd.persisted && !this.trend.macd.adviced) {
-  //     this.trend.macd.adviced = true;
-  //     return ADVICE.short;
-  //   } else return;
-
-  // } else {
-  //   log.debug('In no trend');
-  //   return;
-  // }
+  console.log('MACD:', JSON.stringify(this.trend.macd, null, 2));
 };
 
 strat.rsi = function(candle) {
-  // RSI
   var trend = this.trend.rsi
   var rsi = this.talibIndicators.rsi.result.outReal;
-  var direction = trend.rsi < rsi ? 'up' : 'down';
+  var direction = trend.rsi < rsi ? DIRECTION.up : DIRECTION.down;
   var duration = trend.direction === direction ? trend.duration + 1 : 0;
 
   this.trend.rsi = {
-    rsi: rsi,
     direction: direction,
-    duration: duration
+    duration: duration,
+    rsi: rsi,
   }
 
-  log.debug('RSI:', this.trend.rsi);
-
-  // if (rsi > settings.RSI.thresholds.high) {
-  //   // new trend detected
-  //   if (this.trend.rsi.direction !== 'high') {
-  //     this.trend.rsi = {
-  //       duration: 0,
-  //       persisted: false,
-  //       direction: 'high',
-  //       adviced: false
-  //     };
-  //   }
-
-  //   this.trend.rsi.duration++;
-
-  //   log.debug('RSI', 'High since', this.trend.rsi.duration, 'candle(s)');
-
-  //   if (this.trend.rsi.duration >= settings.RSI.thresholds.persistence) {
-  //     this.trend.rsi.persisted = true;
-  //   }
-
-  //   if (this.trend.rsi.persisted && !this.trend.rsi.adviced) {
-  //     this.trend.rsi.adviced = true;
-  //     return ADVICE.short
-  //   } else return
-    
-  // } else if (rsi < settings.RSI.thresholds.low) {
-  //   // new trend detected
-  //   if (this.trend.rsi.direction !== 'low') {
-  //     this.trend.rsi = {
-  //       duration: 0,
-  //       persisted: false,
-  //       direction: 'low',
-  //       adviced: false
-  //     };
-  //   }
-
-  //   this.trend.rsi.duration++;
-
-  //   log.debug('RSI', 'Low since', this.trend.rsi.duration, 'candle(s)');
-
-  //   if (this.trend.rsi.duration >= settings.RSI.thresholds.persistence) {
-  //     this.trend.rsi.persisted = true;
-  //   }
-
-  //   if (this.trend.rsi.persisted && !this.trend.rsi.adviced) {
-  //     this.trend.rsi.adviced = true;
-  //     return ADVICE.long
-  //   } else return
-
-  // } else {
-  //   log.debug('RSI:', 'No trend');
-  //   return
-  // }
+  console.log('RSI:', JSON.stringify(this.trend.rsi, null, 2));
 };
 
 strat.check = function(candle) {
+  var printCandle = function() {
+    log.debug('date:', candle.start.format());
+    log.debug('candle high:', candle.high);
+    log.debug('candle low:', candle.low);
+    log.debug('candle close:', candle.close);
+  }
+  var advise = function(advice) {
+    this.lastAdvice = advice;
+    this.advice(this.lastAdvice);
+  }.bind(this);
+
+  printCandle();
   this.bbands();
+  this.macd();
   this.rsi();
 
   var bbands = this.trend.bbands;
+  var macd = this.trend.macd;
   var rsi = this.trend.rsi;
 
-  if (this.currentAdvice !== ADVICE.long && !bbands.contracting && rsi.rsi < 40 && rsi.direction === 'up' && rsi.duration < 2) {
-    log.debug('date:', candle.start.format());
-    log.debug('candle high:', candle.high);
-    log.debug('candle low:', candle.low);
-    log.debug('candle close:', candle.close);
-    this.currentAdvice = ADVICE.long;
-    this.advice(this.currentAdvice);
+  var buy = this.lastAdvice !== ADVICE.long;
+  var sell = this.lastAdvice !== ADVICE.short;
+  var crossLowerBBand = bbands.lower < candle.low + (candle.low * 0.0025);
+  var crossUpperBBand = bbands.upper > candle.high - (candle.high * 0.0025);
+  var bbandDirectionUp = bbands.direction === DIRECTION.up;
+  var bbandDirectionDown = bbands.direction === DIRECTION.down;
+  var macdDirectionUp = macd.direction === DIRECTION.up && macd.duration > 0;
+  var macdDirectionDown = macd.direction === DIRECTION.down && macd.duration > 0;
+  var macdHistDirectionUp = macd.histDirection === DIRECTION.up && macd.histDuration > 1;
+  var macdHistDirectionDown = macd.histDirection === DIRECTION.down && macd.histDuration > 1;
+  var rsiRanged = (rsi.rsi > 40) && (rsi.rsi < 60);
+  var rsiDirectionUp = rsi.direction === DIRECTION.up;
+  var rsiDirectionDown = rsi.direction === DIRECTION.down;
+
+  // log.debug('buy', buy);
+  // log.debug('sell', sell);
+  // log.debug('crossLowerBBand', crossLowerBBand);
+  // log.debug('crossUpperBBand', crossUpperBBand);
+  // log.debug('bbandDirectionUp', bbandDirectionUp);
+  // log.debug('bbandDirectionDown', bbandDirectionDown);
+  // log.debug('rsiRanged', rsiRanged);
+  // log.debug('rsiDirectionUp', rsiDirectionUp);
+  // log.debug('rsiDirectionDown', rsiDirectionDown);
+  console.log('\n');
+
+// 2017-09-07 15:36:21 (DEBUG):  date: 2017-08-07T17:05:00-05:00
+// 2017-09-07 15:36:21 (DEBUG):  candle high: 3371.06
+// 2017-09-07 15:36:21 (DEBUG):  candle low: 3362.65
+// 2017-09-07 15:36:21 (DEBUG):  candle close: 3365.55
+// BBANDS: {
+//   "direction": "up",
+//   "duration": 0,
+//   "upper": 3373.7125153746547,
+//   "middle": 3354.3645000000024,
+//   "lower": 3335.01648462535,
+//   "contracting": false,
+//   "width": 1.1536024409185264
+// }
+// MACD: {
+//   "direction": "up",
+//   "duration": 3,
+//   "macd": 2.26176644577572,
+//   "signal": 1.5156509106054106,
+//   "signalDirection": "up",
+//   "signalDuration": 1,
+//   "hist": 0.7461155351703095,
+//   "histDirection": "up",
+//   "histDuration": 3,
+//   "aboveLine": true
+// }
+// RSI: {
+//   "direction": "down",
+//   "duration": 0,
+//   "rsi": 55.548444764369506
+// }
+  if (buy && macdHistDirectionUp && !macd.histAbove && !bbands.contracting) {
+    advise(ADVICE.long);
   }
 
-  if (this.currentAdvice !== ADVICE.short && bbands.contracting && bbands.duration < 2 && rsi.rsi > 70 && rsi.direction === 'down') {
-    log.debug('date:', candle.start.format());
-    log.debug('candle high:', candle.high);
-    log.debug('candle low:', candle.low);
-    log.debug('candle close:', candle.close);
-    this.currentAdvice = ADVICE.short;
-    this.advice(this.currentAdvice);
+// 2017-09-07 15:36:21 (DEBUG):  date: 2017-08-07T18:35:00-05:00
+// 2017-09-07 15:36:21 (DEBUG):  candle high: 3391.99
+// 2017-09-07 15:36:21 (DEBUG):  candle low: 3387
+// 2017-09-07 15:36:21 (DEBUG):  candle close: 3391.04
+// BBANDS: {
+//   "direction": "up",
+//   "duration": 6,
+//   "upper": 3401.8057865197093,
+//   "middle": 3365.1630000000027,
+//   "lower": 3328.520213480296,
+//   "contracting": true,
+//   "width": 2.1777718654167124
+// }
+// MACD: {
+//   "direction": "up",
+//   "duration": 9,
+//   "macd": 10.100846089764673,
+//   "signal": 6.4928137701676985,
+//   "signalDirection": "up",
+//   "signalDuration": 7,
+//   "hist": 3.6080323195969743,
+//   "histDirection": "down",
+//   "histDuration": 1,
+//   "aboveLine": true
+// }
+// RSI: {
+//   "direction": "up",
+//   "duration": 0,
+//   "rsi": 62.96623780844537
+// }
+  if (sell && macdHistDirectionDown && macd.histAbove && bbands.contracting) {
+    advise(ADVICE.short);
   }
-  // log.debug('advice:', advice);
-
-  // if (advice.bbands === long && advice.rsi === long && this.currentAdvice !== long) {
-  //   log.debug('TAKE POSITION:', long);
-  //   this.currentAdvice = long;
-  //   this.advice(long);
-  // } else if (advice.bbands === short && advice.rsi === short && this.currentAdvice !== short) {
-  //   log.debug('TAKE POSITION:', short);
-  //   this.currentAdvice = short;
-  //   this.advice(short);
-  // } else {
-  //   this.advice();
-  // }
 };
 
 module.exports = strat;
