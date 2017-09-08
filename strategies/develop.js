@@ -40,7 +40,9 @@ strat.init = function() {
     rsi: {
       direction: '',
       duration: 0,
-      rsi: 50
+      rsi: 50,
+      lowDuration: 0,
+      highDuration: 0
     }
   };
 
@@ -113,6 +115,8 @@ strat.macd = function(candle) {
 strat.rsi = function(candle) {
   var trend = this.trend.rsi
   var rsi = this.talibIndicators.rsi.result.outReal;
+  var lowDuration = rsi < 30 && rsi > 15 ? trend.lowDuration + 1 : 0;
+  var highDuration = rsi > 70 ? trend.highDuration + 1 : 0;
   var direction = trend.rsi < rsi ? DIRECTION.up : DIRECTION.down;
   var duration = trend.direction === direction ? trend.duration + 1 : 0;
 
@@ -120,7 +124,9 @@ strat.rsi = function(candle) {
     direction: direction,
     duration: duration,
     rsi: rsi,
-  }
+    lowDuration: lowDuration,
+    highDuration: highDuration
+  };
 
   console.log('RSI:', JSON.stringify(this.trend.rsi, null, 2));
 };
@@ -171,73 +177,24 @@ strat.check = function(candle) {
   // log.debug('rsiDirectionDown', rsiDirectionDown);
   console.log('\n');
 
-// 2017-09-07 15:36:21 (DEBUG):  date: 2017-08-07T17:05:00-05:00
-// 2017-09-07 15:36:21 (DEBUG):  candle high: 3371.06
-// 2017-09-07 15:36:21 (DEBUG):  candle low: 3362.65
-// 2017-09-07 15:36:21 (DEBUG):  candle close: 3365.55
-// BBANDS: {
-//   "direction": "up",
-//   "duration": 0,
-//   "upper": 3373.7125153746547,
-//   "middle": 3354.3645000000024,
-//   "lower": 3335.01648462535,
-//   "contracting": false,
-//   "width": 1.1536024409185264
-// }
-// MACD: {
-//   "direction": "up",
-//   "duration": 3,
-//   "macd": 2.26176644577572,
-//   "signal": 1.5156509106054106,
-//   "signalDirection": "up",
-//   "signalDuration": 1,
-//   "hist": 0.7461155351703095,
-//   "histDirection": "up",
-//   "histDuration": 3,
-//   "aboveLine": true
-// }
-// RSI: {
-//   "direction": "down",
-//   "duration": 0,
-//   "rsi": 55.548444764369506
-// }
-  if (buy && macdHistDirectionUp && !macd.histAbove && !bbands.contracting) {
+  if (buy && !macd.histAbove && rsi.lowDuration > 2) {
     advise(ADVICE.long);
   }
 
-// 2017-09-07 15:36:21 (DEBUG):  date: 2017-08-07T18:35:00-05:00
-// 2017-09-07 15:36:21 (DEBUG):  candle high: 3391.99
-// 2017-09-07 15:36:21 (DEBUG):  candle low: 3387
-// 2017-09-07 15:36:21 (DEBUG):  candle close: 3391.04
-// BBANDS: {
-//   "direction": "up",
-//   "duration": 6,
-//   "upper": 3401.8057865197093,
-//   "middle": 3365.1630000000027,
-//   "lower": 3328.520213480296,
-//   "contracting": true,
-//   "width": 2.1777718654167124
-// }
-// MACD: {
-//   "direction": "up",
-//   "duration": 9,
-//   "macd": 10.100846089764673,
-//   "signal": 6.4928137701676985,
-//   "signalDirection": "up",
-//   "signalDuration": 7,
-//   "hist": 3.6080323195969743,
-//   "histDirection": "down",
-//   "histDuration": 1,
-//   "aboveLine": true
-// }
-// RSI: {
-//   "direction": "up",
-//   "duration": 0,
-//   "rsi": 62.96623780844537
-// }
-  if (sell && macdHistDirectionDown && macd.histAbove && bbands.contracting) {
+  if (sell && macd.histAbove && macd.macd > 0 && macdHistDirectionDown && macd.hist > 2.5) {
     advise(ADVICE.short);
   }
+  // if (sell && macd.histAbove && rsi.highDuration > 2) {
+  //   advise(ADVICE.short);
+  // }
+
+  // if (buy && macdHistDirectionUp && !macd.histAbove && !bbands.contracting) {
+  //   advise(ADVICE.long);
+  // }
+
+  // if (sell && macdHistDirectionDown && macd.histAbove && bbands.contracting) {
+  //   advise(ADVICE.short);
+  // }
 };
 
 module.exports = strat;
