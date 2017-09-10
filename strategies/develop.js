@@ -1,6 +1,6 @@
 var _ = require('lodash');
 var log = require('../core/log');
-var config = require('../core/util.js').getConfig();
+var config = require('../core/util').getConfig();
 var settings = config.develop;
 var ADVICE = {
   long: 'long',
@@ -13,6 +13,8 @@ var DIRECTION = {
 var strat = {};
 
 strat.init = function() {
+  this.buyinprice = 0;
+  this.price = 0;
   this.lastAdvice = ADVICE.short;
   this.requiredHistory = config.tradingAdvisor.historySize;
   this.trend = {
@@ -49,14 +51,18 @@ strat.init = function() {
   this.addTalibIndicator('bbands', 'bbands', settings.BBANDS.talib);
   this.addTalibIndicator('macd', 'macd', settings.MACD.talib);
   this.addTalibIndicator('rsi', 'rsi', settings.RSI.talib);
-  // this.addTalibIndicator('sma', 'sma', settings.SMA.talib);
-  // this.addTalibIndicator('stochrsi', 'stochrsi', settings.STOCHRSI.talib);
-  // this.addTalibIndicator('willr', 'willr', settings.WILLR.talib);
 };
 
-strat.update = function(candle) { };
+strat.update = function(candle) {
+  this.price = candle.close;
+};
 
-strat.log = function(candle) { };
+strat.log = function(candle) {
+  log.debug('date:', candle.start.format());
+  log.debug('candle high:', candle.high);
+  log.debug('candle low:', candle.low);
+  log.debug('candle close:', candle.close);
+};
 
 strat.bbands = function(candle) {
   var trend = this.trend.bbands;
@@ -78,8 +84,6 @@ strat.bbands = function(candle) {
     contracting: contracting,
     width: width
   };
-
-  console.log('BBANDS:', JSON.stringify(this.trend.bbands, null, 2));
 };
 
 strat.macd = function(candle) {
@@ -108,8 +112,6 @@ strat.macd = function(candle) {
     histDuration: histDuration,
     histAbove: histAbove
   };
-
-  console.log('MACD:', JSON.stringify(this.trend.macd, null, 2));
 };
 
 strat.rsi = function(candle) {
@@ -127,74 +129,61 @@ strat.rsi = function(candle) {
     lowDuration: lowDuration,
     highDuration: highDuration
   };
-
-  console.log('RSI:', JSON.stringify(this.trend.rsi, null, 2));
 };
 
 strat.check = function(candle) {
-  var printCandle = function() {
-    log.debug('date:', candle.start.format());
-    log.debug('candle high:', candle.high);
-    log.debug('candle low:', candle.low);
-    log.debug('candle close:', candle.close);
-  }
-  var advise = function(advice) {
-    this.lastAdvice = advice;
-    this.advice(this.lastAdvice);
-  }.bind(this);
-
-  printCandle();
+  // Calculate trends
   this.bbands();
   this.macd();
   this.rsi();
+  console.log(JSON.stringify(this.trend, null, 2), '\n');
 
+  // Trend data
   var bbands = this.trend.bbands;
   var macd = this.trend.macd;
   var rsi = this.trend.rsi;
 
   var buy = this.lastAdvice !== ADVICE.long;
   var sell = this.lastAdvice !== ADVICE.short;
-  var crossLowerBBand = bbands.lower < candle.low + (candle.low * 0.0025);
-  var crossUpperBBand = bbands.upper > candle.high - (candle.high * 0.0025);
-  var bbandDirectionUp = bbands.direction === DIRECTION.up;
-  var bbandDirectionDown = bbands.direction === DIRECTION.down;
-  var macdDirectionUp = macd.direction === DIRECTION.up && macd.duration > 0;
-  var macdDirectionDown = macd.direction === DIRECTION.down && macd.duration > 0;
-  var macdHistDirectionUp = macd.histDirection === DIRECTION.up && macd.histDuration > 1;
-  var macdHistDirectionDown = macd.histDirection === DIRECTION.down && macd.histDuration > 1;
-  var rsiRanged = (rsi.rsi > 40) && (rsi.rsi < 60);
-  var rsiDirectionUp = rsi.direction === DIRECTION.up;
-  var rsiDirectionDown = rsi.direction === DIRECTION.down;
 
-  // log.debug('buy', buy);
-  // log.debug('sell', sell);
-  // log.debug('crossLowerBBand', crossLowerBBand);
-  // log.debug('crossUpperBBand', crossUpperBBand);
-  // log.debug('bbandDirectionUp', bbandDirectionUp);
-  // log.debug('bbandDirectionDown', bbandDirectionDown);
-  // log.debug('rsiRanged', rsiRanged);
-  // log.debug('rsiDirectionUp', rsiDirectionUp);
-  // log.debug('rsiDirectionDown', rsiDirectionDown);
-  console.log('\n');
+  // // Stop loss
+  // var stoploss = parseFloat((((this.buyinprice / this.price) * 100).toFixed(0) - 100));
+  // stoploss = stoploss < 1 ? 1 : stoploss;
+
+  // if (sell && stoploss > settings.stoploss) {
+  //   log.debug('EXECUTE STOPLOSS:', stoploss, this.price);
+  //   this.buyinprice = 0;
+  //   this.lastAdvice = ADVICE.short;
+  //   this.advice(this.lastAdvice);
+  //   return;
+  // }
 
   if (buy && !macd.histAbove && rsi.lowDuration > 2) {
-    advise(ADVICE.long);
+    this.buyinprice = candle.close;
+    this.lastAdvice = ADVICE.long;
   }
 
-  if (sell && macd.histAbove && macd.macd > 0 && macdHistDirectionDown && macd.hist > 2.5) {
-    advise(ADVICE.short);
+  if (sell && macd.histAbove && macd.macd > 0 && macd.histDirection === DIRECTION.down && macd.histDuration > 1 && macd.hist > 2.5) {
+    this.buyinprice = 0;
+    this.lastAdvice = ADVICE.short;
   }
-  // if (sell && macd.histAbove && rsi.highDuration > 2) {
-  //   advise(ADVICE.short);
-  // }
 
-  // if (buy && macdHistDirectionUp && !macd.histAbove && !bbands.contracting) {
-  //   advise(ADVICE.long);
-  // }
+  this.advice(this.lastAdvice);
 
-  // if (sell && macdHistDirectionDown && macd.histAbove && bbands.contracting) {
-  //   advise(ADVICE.short);
-  // }
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) start time:      2017-08-01 00:55:00
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) end time:      2017-09-08 23:55:00
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) timespan:      a month
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) sharpe ratio:      -1.900422285292949
+  // 2017-09-09 21:34:51 (INFO):
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) start price:       2819.61 USD
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) end price:       4350 USD
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) Market:        54.27665528%
+  // 2017-09-09 21:34:51 (INFO):
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) amount of trades:    99
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) original simulated balance:  100.00000000 USD
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) current simulated balance:   153.65029682 USD
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) simulated profit:    53.65029682 USD (53.65029682%)
+  // 2017-09-09 21:34:51 (INFO): (PROFIT REPORT) simulated yearly profit:   502.64877021 USD (502.64877021%)
 };
 
 module.exports = strat;
